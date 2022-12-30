@@ -4,8 +4,9 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 import org.albertryu.springbootsample.common.RedisKeyGenerator;
+import org.albertryu.springbootsample.common.RedisTagEnum;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -23,41 +24,48 @@ import java.util.concurrent.TimeUnit;
 public class RedisTagService {
 
     @Autowired
-    private RedisTemplate<String, String> redisTemplate;
+    private StringRedisTemplate masterReplicaStringRedisTemplate;
 
-    @Autowired
-    private RedisTemplate<String, String> readOnlyRedisTemplate;
+    /**
+     * key: redisKey
+     * value: local cache time instant
+     */
+    private final Cache<String, Instant> tagLocalCache = Caffeine.newBuilder().expireAfterAccess(3, TimeUnit.DAYS).build();
 
-    private final Cache<String, Instant> tagMissionDoneCache = Caffeine.newBuilder().expireAfterAccess(3, TimeUnit.DAYS).build();
 
-
-    public void setMissionDoneTag(String uuid) {
-        Instant tagMissionDoneCacheInstant = tagMissionDoneCache.getIfPresent(uuid);
-        if (Objects.nonNull(tagMissionDoneCacheInstant)) {
+    public void setTag(RedisTagEnum redisTagEnum, String uuid) {
+        String redisKey = RedisKeyGenerator.genTagRedisKey(redisTagEnum, uuid);
+        Instant tagCacheInstant = tagLocalCache.getIfPresent(redisKey);
+        if (Objects.nonNull(tagCacheInstant)) {
             return;
         }
 
-        String redisKey = RedisKeyGenerator.genTagMissionDoneRedisKey(uuid);
-        redisTemplate.opsForValue().set(redisKey, "", 3, TimeUnit.DAYS);
-        tagMissionDoneCache.put(uuid, Instant.now());
-        log.info("setMissionDoneTag. uuid={}", uuid);
+        masterReplicaStringRedisTemplate.opsForValue().set(redisKey, Instant.now().toString(), redisTagEnum.getTimeout(), redisTagEnum.getTimeoutUnit());
+        tagLocalCache.put(redisKey, Instant.now());
+        log.info("setTag. uuid={}, redisTagEnum={}", uuid, redisTagEnum);
     }
 
-    public boolean checkMissionDoneTag(String uuid) {
+    public boolean checkTag(RedisTagEnum redisTagEnum, String uuid) {
         boolean ret;
-        Instant tagMissionDoneCacheInstant = tagMissionDoneCache.getIfPresent(uuid);
+        String redisKey = RedisKeyGenerator.genTagRedisKey(redisTagEnum, uuid);
 
-        if (Objects.nonNull(tagMissionDoneCacheInstant)) {
+        Instant tagCacheInstant = tagLocalCache.getIfPresent(redisKey);
+        if (Objects.nonNull(tagCacheInstant)) {
             ret = true;
-            log.info("checkMissionDoneTag from local. ret={}, uuid={}", ret, uuid);
+            log.info("checkTag from local. ret={}, uuid={}, redisTagEnum={}", ret, uuid, redisTagEnum);
         } else {
-            ret = Boolean.TRUE.equals(readOnlyRedisTemplate.hasKey(RedisKeyGenerator.genTagMissionDoneRedisKey(uuid)));
-            log.info("checkMissionDoneTag from redis. ret={}, uuid={}", ret, uuid);
+            ret = Boolean.TRUE.equals(masterReplicaStringRedisTemplate.hasKey(redisKey));
+            log.info("checkTag from redis. ret={}, uuid={}, redisTagEnum={}", ret, uuid, redisTagEnum);
             if (ret) {
-                tagMissionDoneCache.put(uuid, Instant.now());
+                tagLocalCache.put(redisKey, Instant.now());
             }
         }
 
         return ret;
     }
+
+    public void describe() {
+        log.info("RedisTagService describe. tagLocalCache={}", tagLocalCache.asMap());
+    }
+
 }
