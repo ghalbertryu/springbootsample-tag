@@ -35,27 +35,27 @@ public class RedisTagService {
 
     public void setTag(RedisTagEnum redisTagEnum, String uuid) {
         String redisKey = RedisKeyGenerator.genTagRedisKey(redisTagEnum, uuid);
-        Instant tagMissionDoneCacheInstant = tagLocalCache.getIfPresent(redisKey);
-        if (Objects.nonNull(tagMissionDoneCacheInstant)) {
+        Instant tagCacheInstant = tagLocalCache.getIfPresent(redisKey);
+        if (Objects.nonNull(tagCacheInstant)) {
             return;
         }
 
         masterReplicaStringRedisTemplate.opsForValue().set(redisKey, Instant.now().toString(), redisTagEnum.getTimeout(), redisTagEnum.getTimeoutUnit());
         tagLocalCache.put(redisKey, Instant.now());
-        log.info("setMissionDoneTag. uuid={}, redisTagEnum={}", uuid, redisTagEnum);
+        log.info("setTag. uuid={}, redisTagEnum={}", uuid, redisTagEnum);
     }
 
     public boolean checkTag(RedisTagEnum redisTagEnum, String uuid) {
         boolean ret;
         String redisKey = RedisKeyGenerator.genTagRedisKey(redisTagEnum, uuid);
 
-        Instant tagMissionDoneCacheInstant = tagLocalCache.getIfPresent(redisKey);
-        if (Objects.nonNull(tagMissionDoneCacheInstant)) {
+        Instant tagCacheInstant = tagLocalCache.getIfPresent(redisKey);
+        if (Objects.nonNull(tagCacheInstant)) {
             ret = true;
-            log.info("checkMissionDoneTag from local. ret={}, uuid={}, redisTagEnum={}", ret, uuid, redisTagEnum);
+            log.info("checkTag from local. ret={}, uuid={}, redisTagEnum={}", ret, uuid, redisTagEnum);
         } else {
             ret = Boolean.TRUE.equals(masterReplicaStringRedisTemplate.hasKey(redisKey));
-            log.info("checkMissionDoneTag from redis. ret={}, uuid={}, redisTagEnum={}", ret, uuid, redisTagEnum);
+            log.info("checkTag from redis. ret={}, uuid={}, redisTagEnum={}", ret, uuid, redisTagEnum);
             if (ret) {
                 tagLocalCache.put(redisKey, Instant.now());
             }
@@ -65,7 +65,7 @@ public class RedisTagService {
     }
 
     public void describe() {
-        log.info("RedisTagService describe. tagMissionDoneLocalCache={}", tagLocalCache.asMap());
+        log.info("RedisTagService describe. tagLocalCache={}", tagLocalCache.asMap());
     }
 
 }
