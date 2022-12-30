@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.albertryu.springbootsample.common.RedisKeyGenerator;
 import org.albertryu.springbootsample.common.RedisTagEnum;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -24,10 +24,7 @@ import java.util.concurrent.TimeUnit;
 public class RedisTagService {
 
     @Autowired
-    private RedisTemplate<String, String> redisTemplate;
-
-    @Autowired
-    private RedisTemplate<String, String> readOnlyRedisTemplate;
+    private StringRedisTemplate masterReplicaStringRedisTemplate;
 
     /**
      * key: redisKey
@@ -43,7 +40,7 @@ public class RedisTagService {
             return;
         }
 
-        redisTemplate.opsForValue().set(redisKey, Instant.now().toString(), 3, TimeUnit.DAYS);
+        masterReplicaStringRedisTemplate.opsForValue().set(redisKey, Instant.now().toString(), redisTagEnum.getTimeout(), redisTagEnum.getTimeoutUnit());
         tagLocalCache.put(redisKey, Instant.now());
         log.info("setMissionDoneTag. uuid={}, redisTagEnum={}", uuid, redisTagEnum);
     }
@@ -57,7 +54,7 @@ public class RedisTagService {
             ret = true;
             log.info("checkMissionDoneTag from local. ret={}, uuid={}, redisTagEnum={}", ret, uuid, redisTagEnum);
         } else {
-            ret = Boolean.TRUE.equals(readOnlyRedisTemplate.hasKey(redisKey));
+            ret = Boolean.TRUE.equals(masterReplicaStringRedisTemplate.hasKey(redisKey));
             log.info("checkMissionDoneTag from redis. ret={}, uuid={}, redisTagEnum={}", ret, uuid, redisTagEnum);
             if (ret) {
                 tagLocalCache.put(redisKey, Instant.now());

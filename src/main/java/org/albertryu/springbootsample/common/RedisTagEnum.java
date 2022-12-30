@@ -1,6 +1,7 @@
 package org.albertryu.springbootsample.common;
 
 import lombok.AllArgsConstructor;
+import lombok.Getter;
 
 import java.util.concurrent.TimeUnit;
 
@@ -8,6 +9,7 @@ import java.util.concurrent.TimeUnit;
  * 在此定義 RedisTag 類型
  * 要指定對應類型 Tag timeout 資料存活時間
  */
+@Getter
 @AllArgsConstructor
 public enum RedisTagEnum {
     MISSION_DONE(3, TimeUnit.DAYS),
@@ -16,7 +18,7 @@ public enum RedisTagEnum {
     ;
 
 
-    private long timeout;
-    private TimeUnit timeoutUnit;
+    private final long timeout;
+    private final TimeUnit timeoutUnit;
 
 }
